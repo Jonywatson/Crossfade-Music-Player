@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Offline Music Player</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#121212">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="app.css">
+
+</head>
+<body>
+  <div class="app">
+    <!-- TOP - Fixed -->
+    <header class="top-fixed">
+      <div class="top-row">
+        <canvas id="eq-preview" width="80" height="80"></canvas>
+        <img id="album-art" src="" alt="">
+        <div>
+          <div id="now-title">No song</div>
+          <div id="now-artist">Select a file</div>
+        </div>
+    <div class="folder-actions">
+  <button id="add-songs-btn">+ Songs</button>
+  <button id="add-folder-btn">+ Folder</button>
+  <button id="delete-stuck">Delete All</button>
+  <input type="text" id="search" placeholder="Search songs...">
+</div>
+    </header>
+
+    <!-- MIDDLE - Scrollable -->
+    <main class="playlist">
+      <ul id="song-list"></ul>
+      <div id="lyrics-box" class="lyrics-box"></div>
+    </main>
+
+    <!-- BOTTOM - Fixed -->
+    <footer class="bottom-fixed">
+  <div class="controls">
+    <button id="prev">⏮</button>
+    <button id="play">▶️</button>
+    <button id="next">⏭</button>
+    <button id="shuffle">🔀</button>
+    <button id="repeat">🔁</button>
+    <select id="eq-preset">
+      <option value="flat">Flat</option>
+      <option value="bass">Bass Boost</option>
+      <option value="rock">Rock</option>
+      <option value="pop">Pop</option>
+      <option value="vocal">Vocal</option>
+      <option value="electronic">Electronic</option>
+      <option value="custom">Custom</option>
+    </select>
+    <button id="save-eq">💾</button>
+    <!-- Replace this line: <input type="range" id="seek" value="0" min="0" max="100"> -->
+    <canvas id="waveform" width="600" height="40"></canvas>
+    <span id="timer">0:00 / 0:00</span>
+  </div>
+
+  <div class="vu-wrapper">
+    <canvas id="vu-meter" width="300" height="20"></canvas>
+    <input type="range" id="volume" min="0" max="1" step="0.01" value="1">
+  </div> 
+  <div class="eq-controls" id="eq-controls"></div>
+</footer>
+  </div>
+
+  <!-- Hidden file inputs - ADD THESE -->
+  <input type="file" id="file-input" multiple accept="audio/*,.mp3,.m4a,.flac,.ogg,.wav" style="display:none">
+  <input type="file" id="folder-input" webkitdirectory multiple style="display:none">
+
+  <audio id="audio" crossorigin="anonymous"></audio>
+
+  <!-- jsmediatags for ID3 parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+
+  <script src="app.js"></script>    
+</body>
+</html>

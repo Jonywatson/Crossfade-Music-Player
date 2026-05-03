@@ -1,0 +1,258 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #121212; color: #fff; height: 100vh; overflow: hidden;
+}
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+/* TOP - Fixed */
+.top-fixed {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  background: #181818; padding: 6px 10px; /* was 12px */
+  border-bottom: 1px solid #282828;
+}
+.top-row { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+#eq-preview { width: 80px; height: 80px; background: #000; border-radius: 4px; }
+#album-art { width: 60px; height: 60px; background: #333; border-radius: 4px; object-fit: cover; }
+
+.folder-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.folder-actions button,.folder-actions label {
+  background: #1DB954; 
+  border: none; 
+  padding: 5px 8px;
+  border-radius: 20px; 
+  color: #000; 
+  font-weight: 600; 
+  cursor: pointer; 
+  font-size: 11px;
+  white-space: nowrap;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#file-input, #folder-input { display: none; }
+#now-title {
+  font-weight: 600;
+  font-size: 12px; /* Add this - was likely 14px */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px; /* Drop from 150px to 120px */
+}
+
+#now-artist {
+  font-size: 11px; /* Drop from 12px */
+  color: #b3b3b3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px; /* Match title */
+}
+
+/* MIDDLE - Scrollable */
+.playlist {
+  flex: 1; overflow-y: auto; padding: 8px 12px;
+  margin-top: 140px; /* Height of top-fixed */
+  margin-bottom: 180px; /* Height of bottom-fixed */
+}
+#song-list { list-style: none; }
+#song-list li {
+  padding: 8px; border-bottom: 1px solid #282828; cursor: pointer;
+  display: flex; gap: 10px; align-items: center;
+}
+#song-list li:hover, #song-list li.active { background: #282828; }
+.song-thumb { width: 40px; height: 40px; background: #333; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
+.song-meta { flex: 1; min-width: 0; }
+.song-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-artist { font-size: 12px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.del-song { background: none; border: none; color: #b3b3b3; cursor: pointer; padding: 4px; }
+
+/* BOTTOM - Fixed */
+.bottom-fixed {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+  background: #181818; border-top: 1px solid #282828; padding: 12px;
+}
+.controls { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.controls button {
+  background: none;
+  border: none;
+  color: #b3b3b3;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+  width: 32px; /* Add this - locks width */
+  height: 32px; /* Add this */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px; /* Don't grow or shrink */
+}
+.controls button:active {
+  transform: scale(0.9);
+}
+#play {
+  width: 32px;
+  text-align: center;
+}
+
+#shuffle, #repeat, #save-eq {
+  font-size: 18px;
+}
+#shuffle.active, #repeat.active {
+  color: #1DB954;
+}
+
+.controls select {
+  background: #282828;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#seek { 
+  flex: 1 1 100px;
+  min-width: 60px;
+}
+#timer { 
+  font-size: 12px; 
+  color: #b3b3b3; 
+  min-width: 80px; 
+  text-align: right; 
+  white-space: nowrap;
+}
+
+.vu-wrapper { position: relative; height: 20px; margin: 8px 0; }
+#vu-meter { width: 100%; height: 20px; pointer-events: none; }
+#volume {
+  position: absolute; top: 0; left: 0; width: 100%; height: 20px;
+  z-index: 2; opacity: 0.8;
+}
+
+/* NEW: EQ Sliders */
+.eq-controls {
+  display: grid; 
+  grid-template-columns: repeat(10, 1fr); 
+  gap: 4px; 
+  margin-top: 8px;
+}
+.eq-band { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+}
+.eq-band input { 
+  writing-mode: vertical-lr; 
+  direction: rtl; 
+  width: 20px; 
+  height: 60px;
+  accent-color: #1DB954;
+}
+.eq-band div { 
+  font-size: 10px; 
+  color: #fff; 
+  margin: 2px 0; 
+  min-height: 12px;
+}
+.eq-band label { 
+  font-size: 9px; 
+  color: #b3b3b3; 
+  margin-top: 2px; 
+}
+
+input[type="range"] { accent-color: #1DB954; }
+
+/* Search bar in top-fixed */
+#search {
+  grid-column: 1 / -1; /* Span all columns */
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: #282828;
+  border: 1px solid #444;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
+}
+#search::placeholder { color: #666; }
+
+.lyrics-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 2;
+  color: #b3b3b3;
+}
+
+.lyric-line {
+  transition: all 0.2s ease;
+  opacity: 0.4;
+}
+
+.lyric-line.active {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 1;
+}
+
+/* Mobile tweaks */
+@media (max-width: 400px) {
+  .folder-actions button {
+    flex: 1 1 45%;
+  }
+  .folder-actions button:last-child {
+    flex: 1 1 100%;
+  }
+  .controls {
+    gap: 6px;
+  }
+  .controls button {
+    font-size: 18px;
+    min-width: 24px;
+  }
+  #play { font-size: 24px; }
+  #timer {
+    font-size: 11px;
+    min-width: 70px;
+  }
+  .controls select {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+  .eq-band input {
+    height: 50px;
+    width: 18px;
+  }
+  .eq-band label {
+    font-size: 8px;
+  }
+}
+
+#now-title, #now-artist {
+  max-width: 150px;
+}
+
+@media (max-width: 450px) {
+  #now-title, #now-artist {
+    max-width: 100px;
+    font-size: 11px;
+  }
+}

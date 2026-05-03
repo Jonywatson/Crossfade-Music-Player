@@ -1,0 +1,9 @@
+{
+  "name": "Offline Music Player",
+  "short_name": "MusicApp",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#1DB954",
+  "description": "Offline music player with EQ and VU meter"
+}
