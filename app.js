@@ -52,7 +52,7 @@ let activeAudio = audio;
 let activeGain = gainA;
 let nextAudio = audioNext;
 let nextGain = gainB;
-let crossfadeMs = 3000;
+let crossfadeMs = 9000;
 
 // ===== UI Elements =====
 const fileInput = document.getElementById('file-input');
