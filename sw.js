@@ -1,17 +1,18 @@
-const CACHE_NAME = 'music-player-v2';
-const urlsToCache = [
-  './',
-  './index.html',
-  './app.css',
-  './app.js',
-  './manifest.json',
-  'https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js'
-];
+// sw.js
+const CACHE_NAME = 'music-player-v2'; // ← Bump this number
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+self.addEventListener('install', event => {
+  self.skipWaiting(); // Force activate new SW immediately
 });
 
-self.addEventListener('fetch', e => {
-  e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => {
+      return Promise.all(
+        keys.filter(key => key !== CACHE_NAME)
+            .map(key => caches.delete(key)) // Delete old cache
+      );
+    })
+  );
+  self.clients.claim(); // Take control immediately
 });
