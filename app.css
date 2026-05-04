@@ -123,7 +123,24 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
+.waveform-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
 
+#waveform {
+  flex: 1; /* Takes all available space */
+  min-width: 0; /* ← This is the critical fix */
+  height: 40px;
+}
+
+#timer {
+  flex-shrink: 0; /* Don't let timer squish */
+  white-space: nowrap; /* Keep "1:23 / 3:45" together */
+  font-variant-numeric: tabular-nums; /* Prevents width jitter */
+}
 #seek { 
   flex: 1 1 100px;
   min-width: 60px;

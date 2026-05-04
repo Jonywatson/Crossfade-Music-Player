@@ -1,12 +1,20 @@
+// ===== Global State =====
+let songs = [], filteredSongs = [], currentIdx = -1;
+let isShuffle = false;
+let repeatMode = 0; // 0=off, 1=all, 2=one
+let playHistory = [];
+let db;
+let lyrics = [];
+let currentLyricIndex = -1;
+let waveformData = [];
+
 // ===== Audio + Web Audio Setup =====
-const audio = new Audio();
+const audio = document.getElementById('audio');
+const audioNext = document.getElementById('audio-next');
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const source = audioCtx.createMediaElementSource(audio);
 
-// 10-band EQ: 32, 64, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz
+// ===== EQ / Filters Setup - MUST BE BEFORE CONNECTING =====
 const freqs = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
-
-// Create 10 band filters - ONLY ONCE
 const filters = freqs.map(f => {
   const filter = audioCtx.createBiquadFilter();
   filter.type = 'peaking';
@@ -16,16 +24,35 @@ const filters = freqs.map(f => {
   return filter;
 });
 
-// Connect: source -> filters -> analyser -> destination
-const analyser = audioCtx.createAnalyser();
-analyser.fftSize = 256;
-
-source.connect(filters[0]);
+// Chain filters together
 for (let i = 0; i < filters.length - 1; i++) {
   filters[i].connect(filters[i + 1]);
 }
+
+const analyser = audioCtx.createAnalyser();
+analyser.fftSize = 256;
 filters[filters.length - 1].connect(analyser);
 analyser.connect(audioCtx.destination);
+
+// ===== Crossfade Setup =====
+const sourceA = audioCtx.createMediaElementSource(audio);
+const sourceB = audioCtx.createMediaElementSource(audioNext);
+
+const gainA = audioCtx.createGain();
+const gainB = audioCtx.createGain();
+
+// Route: source -> gain -> EQ chain
+sourceA.connect(gainA).connect(filters[0]);
+sourceB.connect(gainB).connect(filters[0]);
+
+gainA.gain.value = 1;
+gainB.gain.value = 0;
+
+let activeAudio = audio;
+let activeGain = gainA;
+let nextAudio = audioNext;
+let nextGain = gainB;
+let crossfadeMs = 3000;
 
 // ===== UI Elements =====
 const fileInput = document.getElementById('file-input');
@@ -54,16 +81,91 @@ const nowArtist = document.getElementById('now-artist');
 const lyricsBox = document.getElementById('lyrics-box');
 const waveformCanvas = document.getElementById('waveform');
 
-// ===== State =====
-let songs = [], filteredSongs = [], currentIdx = -1;
-let isShuffle = false;
-let repeatMode = 0; // 0=off, 1=all, 2=one
-let playHistory = [];
-let db;
-let lyrics = [];
-let currentLyricIndex = -1;
-let waveformData = [];
+// ===== Crossfade Functions =====
+function loadSong(idx) {
+  currentIdx = idx;
+  const song = songs[idx];
+  if (!song) return;
 
+  // Stop any crossfade in progress
+  activeAudio.pause();
+  nextAudio.pause();
+
+  // Reset gains
+  activeGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  nextGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  activeGain.gain.value = 1;
+  nextGain.gain.value = 0;
+
+  // Load into active player
+  if (activeAudio.src) URL.revokeObjectURL(activeAudio.src);
+  const url = URL.createObjectURL(song.blob);
+  activeAudio.src = url;
+  activeAudio.play();
+
+  preloadNextSong();
+  updateUI(song);
+}
+
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    renderWaveform(); 
+  }, 100);
+});
+function preloadNextSong() {
+  if (currentIdx < 0 || songs.length < 2) return;
+  const nextIdx = (currentIdx + 1) % songs.length;
+  if (!songs[nextIdx]) return;
+  if (nextAudio.src) URL.revokeObjectURL(nextAudio.src);
+  const url = URL.createObjectURL(songs[nextIdx].blob);
+  nextAudio.src = url;
+  nextAudio.load();
+}
+
+let isCrossfading = false;
+function crossfade() {
+  if (isCrossfading) return;
+  isCrossfading = true;
+  const now = audioCtx.currentTime;
+
+  activeGain.gain.setValueAtTime(activeGain.gain.value, now);
+  activeGain.gain.linearRampToValueAtTime(0, now + crossfadeMs / 1000);
+
+  nextGain.gain.setValueAtTime(0, now);
+  nextGain.gain.linearRampToValueAtTime(1, now + crossfadeMs / 1000);
+
+  nextAudio.play();
+
+  setTimeout(() => {
+    activeAudio.pause();
+    [activeAudio, nextAudio] = [nextAudio, activeAudio];
+    [activeGain, nextGain] = [nextGain, activeGain];
+    currentIdx = (currentIdx + 1) % songs.length;
+    updateUI(songs[currentIdx]);
+    preloadNextSong();
+    isCrossfading = false;
+  }, crossfadeMs);
+}
+
+function updateUI(song) {
+  if (nowTitle) nowTitle.textContent = song.title;
+  if (nowArtist) nowArtist.textContent = song.artist;
+  if (albumArt) albumArt.src = song.art || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22%3E%3Crect fill=%22%23333%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 fill=%22%23666%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E♪%3C/text%3E%3C/svg%3E';
+  loadLyrics(song.blob);
+  drawWaveform(song.blob);
+  renderPlaylist();
+
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      artwork: song.art? [{ src: song.art, sizes: '512x512', type: 'image/jpeg' }] : []
+    });
+  }
+}
 
 // ===== IndexedDB =====
 function openDB() {
@@ -115,16 +217,13 @@ async function readTags(file) {
         const t = tag.tags;
         let artData = null;
         if (t.picture) {
-          artData = {
-            data: t.picture.data,
-            format: t.picture.format
-          };
+          artData = { data: t.picture.data, format: t.picture.format };
         }
         resolve({
           title: t.title || file.name.replace(/\.[^/.]+$/, ""),
           artist: t.artist || 'Unknown Artist',
           album: t.album || 'Unknown Album',
-          artData // store raw data, not URL
+          artData
         });
       },
       onError: () => resolve({
@@ -136,13 +235,10 @@ async function readTags(file) {
     });
   });
 }
+
 // ===== File Handling =====
-if (addSongsBtn && fileInput) {
-  addSongsBtn.onclick = () => fileInput.click();
-}
-if (addFolderBtn && folderInput) {
-  addFolderBtn.onclick = () => folderInput.click();
-}
+if (addSongsBtn && fileInput) addSongsBtn.onclick = () => fileInput.click();
+if (addFolderBtn && folderInput) addFolderBtn.onclick = () => folderInput.click();
 
 function handleFiles(fileList) {
   openDB().then(async () => {
@@ -153,13 +249,7 @@ function handleFiles(fileList) {
       try {
         const id = crypto.randomUUID();
         const meta = await readTags(file);
-        await dbPut({
-  id,
-  name: file.name,
-  blob: file,
-  path: file.webkitRelativePath || file.name,
- ...meta // meta now has artData, not art
-});
+        await dbPut({ id, name: file.name, blob: file, path: file.webkitRelativePath || file.name,...meta });
         count++;
       } catch (err) {
         console.error('Failed to save:', file.name, err);
@@ -172,12 +262,8 @@ function handleFiles(fileList) {
   });
 }
 
-if (fileInput) {
-  fileInput.onchange = e => handleFiles(e.target.files);
-}
-if (folderInput) {
-  folderInput.onchange = e => handleFiles(e.target.files);
-}
+if (fileInput) fileInput.onchange = e => handleFiles(e.target.files);
+if (folderInput) folderInput.onchange = e => handleFiles(e.target.files);
 
 if (deleteStuckBtn) {
   deleteStuckBtn.onclick = async () => {
@@ -227,8 +313,6 @@ function renderPlaylist() {
 
 async function loadSongs() {
   const rawSongs = await dbGetAll();
-
-  // Recreate blob URLs for album art
   songs = rawSongs.map(s => {
     if (s.artData) {
       const byteArray = new Uint8Array(s.artData.data);
@@ -239,7 +323,6 @@ async function loadSongs() {
     }
     return s;
   });
-
   filteredSongs = [...songs];
   renderPlaylist();
 }
@@ -251,7 +334,7 @@ songList.onclick = e => {
     dbDelete(id).then(loadSongs);
     return;
   }
-  if (li) playSong(parseInt(li.dataset.idx));
+  if (li) loadSong(parseInt(li.dataset.idx));
 };
 
 // ===== Lyrics + Waveform =====
@@ -259,19 +342,12 @@ function loadLyrics(file) {
   lyrics = [];
   lyricsBox.innerHTML = '';
   currentLyricIndex = -1;
-  
-  // If you have .lrc files, fetch them here
-  // Example: fetch(file.name.replace(/\.[^/.]+$/, '.lrc'))
-  //   .then(r => r.text())
-  //   .then(parseLRC)
-  //   .catch(() => lyricsBox.innerHTML = '<div class="no-lyrics">No lyrics found</div>');
 }
 
 function parseLRC(text) {
   lyrics = [];
   const lines = text.split('\n');
   const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
-  
   lines.forEach(line => {
     const match = line.match(timeRegex);
     if (match) {
@@ -283,30 +359,26 @@ function parseLRC(text) {
       if (text) lyrics.push({ time, text });
     }
   });
-  
   lyrics.sort((a, b) => a.time - b.time);
   renderLyrics();
 }
 
 function renderLyrics() {
   if (!lyricsBox) return;
-  lyricsBox.innerHTML = lyrics.map((l, i) => 
+  lyricsBox.innerHTML = lyrics.map((l, i) =>
     `<div class="lyric-line" data-index="${i}">${l.text}</div>`
   ).join('');
 }
 
 async function drawWaveform(file) {
   if (!waveformCanvas) return;
-  const ctx = waveformCanvas.getContext('2d');
   const arrayBuffer = await file.arrayBuffer();
   const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
   const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
-  
   const rawData = audioBuffer.getChannelData(0);
   const samples = 300;
   const blockSize = Math.floor(rawData.length / samples);
   waveformData = [];
-  
   for (let i = 0; i < samples; i++) {
     let sum = 0;
     for (let j = 0; j < blockSize; j++) {
@@ -314,7 +386,6 @@ async function drawWaveform(file) {
     }
     waveformData.push(sum / blockSize);
   }
-  
   renderWaveform();
   tempCtx.close();
 }
@@ -322,69 +393,37 @@ async function drawWaveform(file) {
 function renderWaveform() {
   if (!waveformCanvas || !waveformData.length) return;
   const ctx = waveformCanvas.getContext('2d');
-  const width = waveformCanvas.width = waveformCanvas.offsetWidth;
-  const height = waveformCanvas.height = 40;
+  const dpr = window.devicePixelRatio || 1;
+  
+  // Get CSS size, set canvas buffer to match DPI
+  const rect = waveformCanvas.getBoundingClientRect();
+  const width = rect.width;
+  const height = rect.height;
+  
+  // Only resize if dimensions changed - prevents flicker
+  if (waveformCanvas.width !== width * dpr || waveformCanvas.height !== height * dpr) {
+    waveformCanvas.width = width * dpr;
+    waveformCanvas.height = height * dpr;
+    ctx.scale(dpr, dpr); // Scale so 1 unit = 1 CSS pixel
+  }
+  
   const barWidth = width / waveformData.length;
-  const progress = audio.currentTime / audio.duration || 0;
+  const progress = activeAudio.currentTime / activeAudio.duration || 0;
   
   ctx.clearRect(0, 0, width, height);
   
   waveformData.forEach((val, i) => {
-    const barHeight = val * height * 2;
+    const barHeight = val * height * 2; // *2 makes it more visible
     const x = i * barWidth;
     const y = (height - barHeight) / 2;
-    ctx.fillStyle = i / waveformData.length < progress ? '#1DB954' : '#404040';
-    ctx.fillRect(x, y, barWidth - 1, barHeight);
+    
+    // Brighter colors + better contrast
+    ctx.fillStyle = i / waveformData.length < progress 
+      ? '#1ed760'  // Bright Spotify green for played
+      : '#535353'; // Lighter gray for unplayed, was #404040
+    
+    ctx.fillRect(x, y, Math.max(1, barWidth - 1), barHeight);
   });
-}
-// ===== End Lyrics + Waveform =====
-
-// ===== Playback =====
-async function ensureAudioReady() {
-  if (audioCtx.state === 'suspended') {
-    await audioCtx.resume();
-  }
-}
-
-function playSong(idx) {
-  ensureAudioReady();
-  currentIdx = idx;
-  const song = songs[idx];
-
-  audio.pause();
-  if (audio.src) URL.revokeObjectURL(audio.src);
-  audio.src = URL.createObjectURL(song.blob);
-  audio.load();
-
-  audio.oncanplay = () => {
-    audio.oncanplay = null;
-    audio.play().then(() => {
-      if (playBtn) playBtn.textContent = '⏸';
-    }).catch(err => {
-      if (err.name!== 'AbortError') console.error('Play failed:', err);
-    });
-  };
-
-  if (nowTitle) nowTitle.textContent = song.title;
-  if (nowArtist) nowArtist.textContent = song.artist;
-  if (albumArt) albumArt.src = song.art || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22%3E%3Crect fill=%22%23333%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 fill=%22%23666%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E♪%3C/text%3E%3C/svg%3E';
-  loadLyrics(song.blob);
-  drawWaveform(song.blob);
-
-  renderPlaylist();
-
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      artwork: song.art? [{ src: song.art, sizes: '512x512', type: 'image/jpeg' }] : []
-    });
-    navigator.mediaSession.setActionHandler('play', () => playBtn?.click());
-    navigator.mediaSession.setActionHandler('pause', () => playBtn?.click());
-    navigator.mediaSession.setActionHandler('previoustrack', () => prevBtn?.click());
-    navigator.mediaSession.setActionHandler('nexttrack', () => nextBtn?.click());
-  }
 }
 
 // ===== Controls =====
@@ -392,10 +431,10 @@ let isPlayPending = false;
 if (playBtn) {
   playBtn.onclick = async () => {
     if (isPlayPending) return;
-    await ensureAudioReady();
-    if (audio.paused) {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    if (activeAudio.paused) {
       isPlayPending = true;
-      audio.play().then(() => {
+      activeAudio.play().then(() => {
         playBtn.textContent = '⏸';
         isPlayPending = false;
       }).catch(err => {
@@ -403,7 +442,7 @@ if (playBtn) {
         isPlayPending = false;
       });
     } else {
-      audio.pause();
+      activeAudio.pause();
       playBtn.textContent = '▶️';
     }
   };
@@ -412,9 +451,9 @@ if (playBtn) {
 if (prevBtn) {
   prevBtn.onclick = () => {
     if (isShuffle && playHistory.length) {
-      playSong(playHistory.pop());
+      loadSong(playHistory.pop());
     } else if (currentIdx > 0) {
-      playSong(currentIdx - 1);
+      loadSong(currentIdx - 1);
     }
   };
 }
@@ -423,9 +462,9 @@ if (nextBtn) {
   nextBtn.onclick = () => {
     if (currentIdx < songs.length - 1) {
       if (isShuffle) playHistory.push(currentIdx);
-      playSong(currentIdx + 1);
+      loadSong(currentIdx + 1);
     } else if (repeatMode === 1) {
-      playSong(0);
+      loadSong(0);
     }
   };
 }
@@ -445,46 +484,23 @@ if (repeatBtn) {
   };
 }
 
-audio.onended = () => {
-  if (repeatMode === 2) {
-    audio.currentTime = 0;
-    audio.play();
-  } else if (isShuffle) {
-    playHistory.push(currentIdx);
-    let nextIdx;
-    do {
-      nextIdx = Math.floor(Math.random() * songs.length);
-    } while (nextIdx === currentIdx && songs.length > 1);
-    playSong(nextIdx);
-  } else if (currentIdx < songs.length - 1) {
-    playSong(currentIdx + 1);
-  } else if (repeatMode === 1) {
-    playSong(0);
-  }
-};
-
 // ===== Seek + Volume =====
-audio.ontimeupdate = () => {
-  if (!audio.duration) return;
+function updateTimeUI() {
+  if (!activeAudio.duration) return;
   const fmt = t => `${Math.floor(t / 60)}:${Math.floor(t % 60).toString().padStart(2, '0')}`;
-  if (timer) timer.textContent = `${fmt(audio.currentTime)} / ${fmt(audio.duration)}`;
-  
-  // Waveform progress update
+  if (timer) timer.textContent = `${fmt(activeAudio.currentTime)} / ${fmt(activeAudio.duration)}`;
   renderWaveform();
-  
-  // Lyric sync
+
   if (!lyrics.length) return;
-  const time = audio.currentTime;
+  const time = activeAudio.currentTime;
   let newIndex = -1;
-  
   for (let i = lyrics.length - 1; i >= 0; i--) {
     if (time >= lyrics[i].time) {
       newIndex = i;
       break;
     }
   }
-  
-  if (newIndex !== currentLyricIndex) {
+  if (newIndex!== currentLyricIndex) {
     document.querySelectorAll('.lyric-line').forEach(el => el.classList.remove('active'));
     if (newIndex >= 0) {
       const activeEl = lyricsBox?.querySelector(`[data-index="${newIndex}"]`);
@@ -495,19 +511,25 @@ audio.ontimeupdate = () => {
     }
     currentLyricIndex = newIndex;
   }
-};
+}
+
+audio.addEventListener('timeupdate', updateTimeUI);
+audioNext.addEventListener('timeupdate', updateTimeUI);
 
 if (waveformCanvas) {
   waveformCanvas.onclick = (e) => {
     const rect = waveformCanvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const percent = x / rect.width;
-    if (audio.duration) audio.currentTime = percent * audio.duration;
+    if (activeAudio.duration) activeAudio.currentTime = percent * activeAudio.duration;
   };
 }
 
 if (volume) {
-  volume.oninput = () => audio.volume = volume.value;
+  volume.oninput = () => {
+    audio.volume = volume.value;
+    audioNext.volume = volume.value;
+  };
 }
 
 // ===== EQ Sliders + Presets =====
@@ -529,9 +551,7 @@ function createEQSliders() {
     slider.oninput = e => {
       const idx = parseInt(e.target.dataset.idx);
       const val = parseInt(e.target.value);
-      if (filters[idx]) {
-        filters[idx].gain.value = val;
-      }
+      if (filters[idx]) filters[idx].gain.value = val;
       e.target.nextElementSibling.textContent = val > 0? `+${val}` : val;
       detectPreset();
     };
@@ -556,7 +576,6 @@ function loadEQ() {
   if (savedName && eqPresetSelect) eqPresetSelect.value = savedName;
 }
 
-// ===== EQ Presets =====
 const EQ_PRESETS = {
   flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   bass: [6, 5, 4, 2, 0, 0, 0, 0, 0, 0],
@@ -570,7 +589,6 @@ const EQ_PRESETS = {
 function applyEQPreset(name) {
   const gains = EQ_PRESETS[name];
   if (!gains) return;
-
   gains.forEach((g, i) => {
     if (filters[i]) {
       filters[i].gain.value = g;
@@ -580,11 +598,8 @@ function applyEQPreset(name) {
       if (label) label.textContent = g > 0? `+${g}` : g;
     }
   });
-
   localStorage.setItem('eqPresetName', name);
-  if (name!== 'custom') {
-    localStorage.setItem('eqPreset', JSON.stringify(gains));
-  }
+  if (name!== 'custom') localStorage.setItem('eqPreset', JSON.stringify(gains));
 }
 
 function detectPreset() {
@@ -600,11 +615,7 @@ function detectPreset() {
   EQ_PRESETS.custom = current;
 }
 
-if (eqPresetSelect) {
-  eqPresetSelect.onchange = () => {
-    applyEQPreset(eqPresetSelect.value);
-  };
-}
+if (eqPresetSelect) eqPresetSelect.onchange = () => applyEQPreset(eqPresetSelect.value);
 
 if (saveEqBtn) {
   saveEqBtn.onclick = () => {
@@ -629,7 +640,6 @@ function drawVU() {
   const w = vuCanvas.width = vuCanvas.offsetWidth;
   const h = vuCanvas.height = vuCanvas.offsetHeight;
   vuCtx.clearRect(0, 0, w, h);
-
   const grad = vuCtx.createLinearGradient(0, 0, w, 0);
   grad.addColorStop(0, '#00ff00');
   grad.addColorStop(0.5, '#ffff00');
@@ -653,59 +663,64 @@ function drawEQPreview() {
   }
 }
 
+// ===== Crossfade Event Listeners =====
+[audio, audioNext].forEach(aud => {
+  aud.addEventListener('timeupdate', () => {
+    if (aud === activeAudio && aud.duration && aud.currentTime > aud.duration - crossfadeMs / 1000 - 0.1) {
+      if (nextAudio.readyState >= 2 && nextAudio.paused) crossfade();
+    }
+  });
+});
+
+audio.addEventListener('ended', () => {
+  if (!isCrossfading) loadSong((currentIdx + 1) % songs.length);
+});
+audioNext.addEventListener('ended', () => {
+  if (!isCrossfading) loadSong((currentIdx + 1) % songs.length);
+});
+
+// ===== Media Session =====
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => playBtn?.click());
+  navigator.mediaSession.setActionHandler('pause', () => playBtn?.click());
+  navigator.mediaSession.setActionHandler('previoustrack', () => prevBtn?.click());
+  navigator.mediaSession.setActionHandler('nexttrack', () => nextBtn?.click());
+}
+
+// ===== Auto-adjust playlist margins =====
+function setPlaylistMargins() {
+  const top = document.querySelector('.top-fixed')?.offsetHeight || 0;
+  const bottom = document.querySelector('.bottom-fixed')?.offsetHeight || 0;
+  const playlist = document.querySelector('.playlist');
+  if (playlist) {
+    playlist.style.marginTop = top + 'px';
+    playlist.style.marginBottom = bottom + 'px';
+  }
+}
+
 // ===== Init =====
 createEQSliders();
 loadEQ();
 drawVU();
 drawEQPreview();
 openDB().then(loadSongs);
-
-// Auto-adjust playlist margins for fixed header/footer
-function setPlaylistMargins() {
-  const top = document.querySelector('.top-fixed')?.offsetHeight || 0;
-  const bottom = document.querySelector('.bottom-fixed')?.offsetHeight || 0;
-  const playlist = document.querySelector('.playlist');
-  if (playlist) {
-    playlist.style.marginTop = top + 'px';
-    playlist.style.marginBottom = bottom + 'px';
-  }
-}
 setPlaylistMargins();
 window.addEventListener('resize', setPlaylistMargins);
 
-
-// ... all your existing code ...
-
-// Auto-adjust playlist margins for fixed header/footer
-function setPlaylistMargins() {
-  const top = document.querySelector('.top-fixed')?.offsetHeight || 0;
-  const bottom = document.querySelector('.bottom-fixed')?.offsetHeight || 0;
-  const playlist = document.querySelector('.playlist');
-  if (playlist) {
-    playlist.style.marginTop = top + 'px';
-    playlist.style.marginBottom = bottom + 'px';
-  }
-}
-setPlaylistMargins();
-window.addEventListener('resize', setPlaylistMargins);
-
-// === ADD THIS LAST ===
+// ===== Cleanup =====
 window.addEventListener('beforeunload', () => {
   songs.forEach(s => {
-    if (s.art && s.art.startsWith('blob:')) {
-      URL.revokeObjectURL(s.art);
-    }
+    if (s.art && s.art.startsWith('blob:')) URL.revokeObjectURL(s.art);
   });
-  if (audio.src && audio.src.startsWith('blob:')) {
-    URL.revokeObjectURL(audio.src);
-  }
+  if (audio.src && audio.src.startsWith('blob:')) URL.revokeObjectURL(audio.src);
+  if (audioNext.src && audioNext.src.startsWith('blob:')) URL.revokeObjectURL(audioNext.src);
 });
 
-// ===== Service Worker Registration for PWA =====
+// ===== Service Worker =====
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registered:', reg.scope))
-      .catch(err => console.log('SW registration failed:', err));
+     .then(reg => console.log('SW registered:', reg.scope))
+     .catch(err => console.log('SW registration failed:', err));
   });
 }
