@@ -52,7 +52,7 @@ let activeAudio = audio;
 let activeGain = gainA;
 let nextAudio = audioNext;
 let nextGain = gainB;
-let crossfadeMs = 9000;
+let crossfadeMs = 5000; // 5 seconds - smooth, DJ-style  
 
 // ===== UI Elements =====
 const fileInput = document.getElementById('file-input');
@@ -87,24 +87,47 @@ function loadSong(idx) {
   const song = songs[idx];
   if (!song) return;
 
-  // Stop any crossfade in progress
   activeAudio.pause();
   nextAudio.pause();
-
-  // Reset gains
   activeGain.gain.cancelScheduledValues(audioCtx.currentTime);
   nextGain.gain.cancelScheduledValues(audioCtx.currentTime);
   activeGain.gain.value = 1;
   nextGain.gain.value = 0;
 
-  // Load into active player
   if (activeAudio.src) URL.revokeObjectURL(activeAudio.src);
   const url = URL.createObjectURL(song.blob);
   activeAudio.src = url;
   activeAudio.play();
 
+  // Update cover art using the helper
+  updateAlbumArt(song);
+
   preloadNextSong();
   updateUI(song);
+}
+function updateAlbumArt(song) {
+  try {
+    const img = document.getElementById('albumArt');
+
+    if (!img) {
+      console.error('updateAlbumArt: #albumArt element not found');
+      return;
+    }
+
+    if (song && song.art) {
+      // Song has embedded art
+      img.src = song.art;
+      document.getElementById('cover').classList.remove('no-song');
+      console.log('Set art to embedded');
+    } else {
+      // No embedded art, use default SVG
+      img.src = 'assets/default-art.svg?v=' + Date.now();
+      document.getElementById('cover').classList.add('no-song');
+      console.log('Set art to default SVG');
+    }
+  } catch (err) {
+    console.error('updateAlbumArt error:', err);
+  }
 }
 
 let resizeTimer;
@@ -143,6 +166,8 @@ function crossfade() {
     [activeAudio, nextAudio] = [nextAudio, activeAudio];
     [activeGain, nextGain] = [nextGain, activeGain];
     currentIdx = (currentIdx + 1) % songs.length;
+    updateAlbumArt(songs[currentIdx]);
+
     updateUI(songs[currentIdx]);
     preloadNextSong();
     isCrossfading = false;
@@ -152,7 +177,7 @@ function crossfade() {
 function updateUI(song) {
   if (nowTitle) nowTitle.textContent = song.title;
   if (nowArtist) nowArtist.textContent = song.artist;
-  if (albumArt) albumArt.src = song.art || 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22%3E%3Crect fill=%22%23333%22 width=%2280%22 height=%2280%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 fill=%22%23666%22 text-anchor=%22middle%22 dy=%22.3em%22 font-size=%2240%22%3E♪%3C/text%3E%3C/svg%3E';
+  
   loadLyrics(song.blob);
   drawWaveform(song.blob);
   renderPlaylist();

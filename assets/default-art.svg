@@ -1,0 +1,65 @@
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Animated gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7C3AED">
+        <animate attributeName="stop-color" values="#7C3AED;#A855F7;#EC4899;#7C3AED" dur="12s" repeatCount="indefinite"/>
+      </stop>
+      <stop offset="100%" stop-color="#A78BFA">
+        <animate attributeName="stop-color" values="#A78BFA;#C084FC;#F472B6;#A78BFA" dur="12s" repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+    
+    <!-- Glow -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="512" height="512" rx="60" fill="url(#bgGrad)"/>
+  
+  <!-- Centered vinyl record -->
+  <g transform="translate(256, 256)" filter="url(#glow)">
+    <!-- Spin the record -->
+    <animateTransform attributeName="transform" type="rotate" 
+                      values="0; 360" dur="20s" repeatCount="indefinite" additive="sum"/>
+    
+    <!-- Outer record - smaller so it sits nicely centered -->
+    <circle cx="0" cy="0" r="120" fill="#1a1a1a" />
+    <circle cx="0" cy="0" r="115" fill="none" stroke="#333" stroke-width="2" />
+    
+    <!-- Grooves -->
+    <circle cx="0" cy="0" r="100" fill="none" stroke="#2a2a2a" stroke-width="3" opacity="0.6"/>
+    <circle cx="0" cy="0" r="80" fill="none" stroke="#2a2a2a" stroke-width="3" opacity="0.6"/>
+    <circle cx="0" cy="0" r="60" fill="none" stroke="#2a2a2a" stroke-width="3" opacity="0.6"/>
+    
+    <!-- Label -->
+    <circle cx="0" cy="0" r="35" fill="#7C3AED" />
+    <circle cx="0" cy="0" r="30" fill="none" stroke="white" stroke-width="1" opacity="0.3"/>
+    
+    <!-- Center hole -->
+    <circle cx="0" cy="0" r="10" fill="#1a1a1a" />
+    
+    <!-- Sound waves - contained within bounds -->
+    <g opacity="0.7" stroke="white" stroke-width="5" fill="none" stroke-linecap="round">
+      <path d="M-140 0 Q-100 -30 -60 0 Q-30 30 -10 0">
+        <animate attributeName="opacity" values="0.2; 0.7; 0.2" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <path d="M140 0 Q100 -30 60 0 Q30 30 10 0">
+        <animate attributeName="opacity" values="0.2; 0.7; 0.2" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+      </path>
+      <path d="M-140 0 Q-100 30 -60 0 Q-30 -30 -10 0">
+        <animate attributeName="opacity" values="0.2; 0.7; 0.2" dur="2s" begin="1s" repeatCount="indefinite"/>
+      </path>
+      <path d="M140 0 Q100 30 60 0 Q30 -30 10 0">
+        <animate attributeName="opacity" values="0.2; 0.7; 0.2" dur="2s" begin="1.5s" repeatCount="indefinite"/>
+      </path>
+    </g>
+  </g>
+</svg>

@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <title>Offline Music Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Crossfade Music Player - 5-Second Crossfades in Your Browser</title>
+  <meta name="description" content="True 5-second audio crossfades. Works on iPhone, Android, desktop. No app store needed. Offline PWA. Free.">
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#121212">
   <link rel="icon" href="data:,">
@@ -16,7 +17,9 @@
     <header class="top-fixed">
       <div class="top-row">
         <canvas id="eq-preview" width="80" height="80"></canvas>
-        <img id="album-art" src="" alt="">
+        <div id="cover" class="no-song">
+      <img id="albumArt" src="assets/default-art.svg" class="album-art">
+    </div>
         <div>
           <div id="now-title">No song</div>
           <div id="now-artist">Select a file</div>
@@ -37,7 +40,7 @@
 
     <!-- BOTTOM - Fixed -->
     <footer class="bottom-fixed">
-  <div class="controls">
+    <div class="controls">
     <button id="prev">⏮</button>
     <button id="play">▶️</button>
     <button id="next">⏭</button>
@@ -78,6 +81,6 @@
   <!-- jsmediatags for ID3 parsing -->
   <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
 
-  <script src="app.js"></script>    
+  <script src="app.js"></script>   
 </body>
 </html>

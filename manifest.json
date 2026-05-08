@@ -1,6 +1,6 @@
 {
-  "name": "Offline Music Player",
-  "short_name": "MusicApp",
+  "name": "Crossfade Music Player",
+  "short_name": "Crossfade",
   "start_url": "/music-player/",
   "display": "standalone",
   "background_color": "#121212",
