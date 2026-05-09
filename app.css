@@ -25,7 +25,9 @@ body {
   right: 0;
   z-index: 100;
 }
-
+.top-fixed button {
+  flex-shrink: 0;
+}
 .top-row { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
 #eq-preview { width: 80px; height: 80px; background: #000; border-radius: 4px; }
 #albumArt { width: 60px; height: 60px; background: #333; border-radius: 4px; object-fit: cover; }
@@ -86,7 +88,8 @@ body {
 #song-list li:hover, #song-list li.active { background: #282828; }
 .song-thumb { width: 40px; height: 40px; background: #333; border-radius: 4px; object-fit: cover; flex-shrink: 0; }
 .song-meta { flex: 1; min-width: 0; }
-.song-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+  min-width: 0;}
 .song-artist { font-size: 12px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del-song { background: none; border: none; color: #b3b3b3; cursor: pointer; padding: 4px; }
 
@@ -254,7 +257,7 @@ input[type="range"] { accent-color: #1DB954; }
   width: 80px;
   height: 80px;
   aspect-ratio: 1 / 1;  /* force square */
-  margin-right: 2px;
+  margin-right: 12px;
   flex-shrink: 0;
 }
 
