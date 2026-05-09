@@ -254,7 +254,7 @@ input[type="range"] { accent-color: #1DB954; }
   width: 80px;
   height: 80px;
   aspect-ratio: 1 / 1;  /* force square */
-  margin-right: 12px;
+  margin-right: 2px;
   flex-shrink: 0;
 }
 
@@ -269,6 +269,15 @@ input[type="range"] { accent-color: #1DB954; }
   object-fit: cover;
   padding: 0;
   background: #1E293B;
+}
+
+
+/* In your CSS for the icons/buttons */
+.top-fixed svg, 
+.bottom-fixed svg {
+  width: 24px;   /* or whatever size you’re using */
+  height: 24px;
+  flex-shrink: 0; /* prevents flex from squishing it */
 }
 
 /* Mobile tweaks */
