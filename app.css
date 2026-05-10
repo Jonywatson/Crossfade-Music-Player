@@ -254,15 +254,15 @@ input[type="range"] { accent-color: #1DB954; }
 }
 
 #cover {
-  width: 80px;
-  height: 80px;
+  width: 70px;
+  height: 70px;
   aspect-ratio: 1 / 1;  /* force square */
-  margin-right: 12px;
+  margin-right: 4px;
   flex-shrink: 0;
 }
 
 #cover img {
-  width: 100%;
+  width: 90%;
   height: 100%;
   object-fit: cover;
   border-radius: 8px;
@@ -281,6 +281,30 @@ input[type="range"] { accent-color: #1DB954; }
   width: 24px;   /* or whatever size you’re using */
   height: 24px;
   flex-shrink: 0; /* prevents flex from squishing it */
+}
+
+.song-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  cursor: pointer;
+}
+.song-art {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.song-row.active {
+  background: #1ed76022; /* subtle green tint */
+  border-left: 3px solid #1ed760;
+}
+
+.playlist {
+  margin-top: 120px; /* adjust to match height of your top bar */
+  margin-bottom: 100px; /* adjust to match height of bottom controls */
+  overflow-y: auto;
 }
 
 /* Mobile tweaks */
