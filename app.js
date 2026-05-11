@@ -4,9 +4,12 @@ let isShuffle = false;
 let repeatMode = 0; // 0=off, 1=all, 2=one
 let playHistory = [];
 let db;
+let dbReady = openDB();  // open once at top level
 let lyrics = [];
 let currentLyricIndex = -1;
 let waveformData = [];
+let nextIdx = -1;
+
 
 // ===== Audio + Web Audio Setup =====
 const audio = document.getElementById('audio');
@@ -101,9 +104,9 @@ function loadSong(idx) {
 
   // Update cover art using the helper
   updateAlbumArt(song);
-
-  preloadNextSong();
   updateUI(song);
+  
+  
 }
 function updateAlbumArt(song) {
   try {
@@ -118,12 +121,10 @@ function updateAlbumArt(song) {
       // Song has embedded art
       img.src = song.art;
       document.getElementById('cover').classList.remove('no-song');
-      console.log('Set art to embedded');
     } else {
       // No embedded art, use default SVG
       img.src = 'assets/default-art.svg?v=' + Date.now();
       document.getElementById('cover').classList.add('no-song');
-      console.log('Set art to default SVG');
     }
   } catch (err) {
     console.error('updateAlbumArt error:', err);
@@ -139,8 +140,22 @@ window.addEventListener('resize', () => {
 });
 function preloadNextSong() {
   if (currentIdx < 0 || songs.length < 2) return;
-  const nextIdx = (currentIdx + 1) % songs.length;
-  if (!songs[nextIdx]) return;
+
+  if (isShuffle) {
+    do {
+      nextIdx = Math.floor(Math.random() * songs.length);
+    } while (nextIdx === currentIdx);
+  } else if (repeatMode === 1) {
+    nextIdx = (currentIdx + 1) % songs.length;
+  } else {
+    nextIdx = currentIdx + 1;
+    if (nextIdx >= songs.length) {
+      nextIdx = -1;
+      return;
+    } // end of queue
+  }
+
+  if (nextIdx < 0 ||!songs[nextIdx]) return;
   if (nextAudio.src) URL.revokeObjectURL(nextAudio.src);
   const url = URL.createObjectURL(songs[nextIdx].blob);
   nextAudio.src = url;
@@ -150,6 +165,20 @@ function preloadNextSong() {
 let isCrossfading = false;
 function crossfade() {
   if (isCrossfading) return;
+
+  // If repeat one, don't crossfade - just loop current
+  if (repeatMode === 2) {
+    activeAudio.currentTime = 0;
+    activeAudio.play();
+    return;
+  }
+
+  // If nextAudio isn’t loaded, nothing to crossfade to
+  if (nextAudio.readyState < 2) {
+    isCrossfading = false;
+    return;
+  }
+
   isCrossfading = true;
   const now = audioCtx.currentTime;
 
@@ -162,18 +191,18 @@ function crossfade() {
   nextAudio.play();
 
   setTimeout(() => {
-    activeAudio.pause();
-    [activeAudio, nextAudio] = [nextAudio, activeAudio];
-    [activeGain, nextGain] = [nextGain, activeGain];
-    currentIdx = (currentIdx + 1) % songs.length;
-    updateAlbumArt(songs[currentIdx]);
+  activeAudio.pause();
+  [activeAudio, nextAudio] = [nextAudio, activeAudio];
+  [activeGain, nextGain] = [nextGain, activeGain];
 
-    updateUI(songs[currentIdx]);
-    preloadNextSong();
-    isCrossfading = false;
-  }, crossfadeMs);
+  currentIdx = nextIdx; // now this matches what was actually preloaded
+  // Now currentIdx is correct, so UI will update to the right song
+  updateAlbumArt(songs[currentIdx]);
+  updateUI(songs[currentIdx]);
+  preloadNextSong();
+  isCrossfading = false;
+}, crossfadeMs);
 }
-
 function updateUI(song) {
   if (nowTitle) nowTitle.textContent = song.title;
   if (nowArtist) nowArtist.textContent = song.artist;
@@ -266,7 +295,7 @@ if (addSongsBtn && fileInput) addSongsBtn.onclick = () => fileInput.click();
 if (addFolderBtn && folderInput) addFolderBtn.onclick = () => folderInput.click();
 
 function handleFiles(fileList) {
-  openDB().then(async () => {
+  dbReady.then(async () => {
     let count = 0;
     for (const file of fileList) {
       if (!file.type.startsWith('audio/') &&!/\.(mp3|m4a|flac|ogg|wav)$/i.test(file.name)) continue;
@@ -280,8 +309,17 @@ function handleFiles(fileList) {
         console.error('Failed to save:', file.name, err);
       }
     }
-    console.log(`Imported ${count} songs`);
+    
     await loadSongs();
+    // Auto-play first song if nothing is playing yet
+    if (songs.length > 0 && currentIdx === -1) {
+    loadSong(0);
+  // Need user gesture to actually play due to browser autoplay rules
+  playBtn.textContent = '▶️'; // show play icon
+  nowTitle.textContent = songs[0].title;
+  nowArtist.textContent = songs[0].artist;
+  updateAlbumArt(songs[0]);
+}
     if (fileInput) fileInput.value = '';
     if (folderInput) folderInput.value = '';
   });
@@ -350,6 +388,15 @@ async function loadSongs() {
   });
   filteredSongs = [...songs];
   renderPlaylist();
+
+  // Auto-load first song on app start if none selected
+  if (songs.length > 0 && currentIdx === -1) {
+    loadSong(0);
+    playBtn.textContent = '▶️';
+    nowTitle.textContent = songs[0].title;
+    nowArtist.textContent = songs[0].artist;
+    updateAlbumArt(songs[0]);
+  }
 }
 
 songList.onclick = e => {
@@ -451,41 +498,55 @@ function renderWaveform() {
   });
 }
 
+
 // ===== Controls =====
 let isPlayPending = false;
-if (playBtn) {
-  playBtn.onclick = async () => {
-    if (isPlayPending) return;
-    if (audioCtx.state === 'suspended') await audioCtx.resume();
-    if (activeAudio.paused) {
-      isPlayPending = true;
-      activeAudio.play().then(() => {
-        playBtn.textContent = '⏸';
-        isPlayPending = false;
-      }).catch(err => {
-        if (err.name!== 'AbortError') console.error('Play failed:', err);
-        isPlayPending = false;
-      });
-    } else {
-      activeAudio.pause();
-      playBtn.textContent = '▶️';
-    }
-  };
-}
 
-if (prevBtn) {
-  prevBtn.onclick = () => {
-    if (isShuffle && playHistory.length) {
-      loadSong(playHistory.pop());
-    } else if (currentIdx > 0) {
-      loadSong(currentIdx - 1);
-    }
-  };
-}
+function setupControls() {
+  if (playBtn) {
+    playBtn.onclick = async () => {
+      if (isPlayPending) return;
+      
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
 
-if (nextBtn) {
+      if (currentIdx === -1 && songs.length > 0) loadSong(0);
+
+      if (activeAudio.paused) {
+        isPlayPending = true;
+        activeAudio.play().then(() => {
+          playBtn.textContent = '⏸';
+          isPlayPending = false;
+        }).catch(err => {
+          if (err.name !== 'AbortError') console.error('Play failed:', err);
+          isPlayPending = false;
+        });
+      } else {
+        activeAudio.pause();
+        playBtn.textContent = '▶️';
+      }
+    };
+  }
+
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      if (isShuffle && playHistory.length) {
+        loadSong(playHistory.pop());
+      } else if (currentIdx > 0) {
+        playHistory.push(currentIdx);
+        loadSong(currentIdx - 1);
+      }
+    };
+  }
+
+  if (nextBtn) {
   nextBtn.onclick = () => {
-    if (currentIdx < songs.length - 1) {
+    if (isShuffle && songs.length > 1) {
+      let next;
+      do { next = Math.floor(Math.random() * songs.length); }
+      while (next === currentIdx);
+      playHistory.push(currentIdx);
+      loadSong(next);
+    } else if (currentIdx < songs.length - 1) {
       if (isShuffle) playHistory.push(currentIdx);
       loadSong(currentIdx + 1);
     } else if (repeatMode === 1) {
@@ -494,20 +555,29 @@ if (nextBtn) {
   };
 }
 
-if (shuffleBtn) {
-  shuffleBtn.onclick = () => {
-    isShuffle =!isShuffle;
-    shuffleBtn.classList.toggle('active', isShuffle);
-  };
+  if (shuffleBtn) {
+    shuffleBtn.onclick = () => {
+      isShuffle = !isShuffle;
+      shuffleBtn.classList.toggle('active', isShuffle);
+      console.log('Shuffle:', isShuffle); // for debugging
+
+      // Re-preload next song using new shuffle state
+    preloadNextSong();
+    };
+  }
+
+  if (repeatBtn) {
+    repeatBtn.onclick = () => {
+      repeatMode = (repeatMode + 1) % 3;
+      repeatBtn.classList.toggle('active', repeatMode > 0);
+      repeatBtn.textContent = repeatMode === 2 ? '🔂' : '🔁';
+      console.log('Repeat mode:', repeatMode); // for debugging
+    };
+  }
 }
 
-if (repeatBtn) {
-  repeatBtn.onclick = () => {
-    repeatMode = (repeatMode + 1) % 3;
-    repeatBtn.classList.toggle('active', repeatMode > 0);
-    repeatBtn.textContent = repeatMode === 2? '🔂' : '🔁';
-  };
-}
+// Call it after DOM elements exist
+setupControls();
 
 // ===== Seek + Volume =====
 function updateTimeUI() {
@@ -695,15 +765,40 @@ function drawEQPreview() {
       if (nextAudio.readyState >= 2 && nextAudio.paused) crossfade();
     }
   });
-});
 
-audio.addEventListener('ended', () => {
-  if (!isCrossfading) loadSong((currentIdx + 1) % songs.length);
-});
-audioNext.addEventListener('ended', () => {
-  if (!isCrossfading) loadSong((currentIdx + 1) % songs.length);
-});
+  // Replace the old 'ended' listeners with this:
+  aud.addEventListener('ended', () => {
+    if (isCrossfading) return;
 
+    // Repeat one
+    if (repeatMode === 2) {
+      aud.currentTime = 0;
+      aud.play();
+      return;
+    }
+
+    // Shuffle
+    if (isShuffle && songs.length > 1) {
+      let next;
+      do {
+        next = Math.floor(Math.random() * songs.length);
+      } while (next === currentIdx);
+      playHistory.push(currentIdx);
+      loadSong(next);
+      return;
+    }
+
+    // Normal next / repeat all
+    if (currentIdx < songs.length - 1) {
+      if (!isShuffle) playHistory.push(currentIdx);
+      loadSong(currentIdx + 1);
+    } else if (repeatMode === 1) {
+      loadSong(0); // repeat all: loop to first
+    } else {
+      playBtn.textContent = '▶️'; // end of queue
+    }
+  });
+});
 // ===== Media Session =====
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', () => playBtn?.click());
@@ -728,7 +823,7 @@ createEQSliders();
 loadEQ();
 drawVU();
 drawEQPreview();
-openDB().then(loadSongs);
+dbReady.then(loadSongs);
 setPlaylistMargins();
 window.addEventListener('resize', setPlaylistMargins);
 

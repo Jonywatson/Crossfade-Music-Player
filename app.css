@@ -93,6 +93,12 @@ body {
 .song-artist { font-size: 12px; color: #b3b3b3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del-song { background: none; border: none; color: #b3b3b3; cursor: pointer; padding: 4px; }
 
+#song-list li.active {
+  background: #1ed76022; /* light green tint */
+  border-left: 3px solid #1ed760; /* perpendicular green line */
+  padding-left: 9px; /* 12px original - 3px border = 9px to keep alignment */
+}
+
 /* BOTTOM - Fixed */
 .bottom-fixed {
   position: fixed;
@@ -301,10 +307,9 @@ input[type="range"] { accent-color: #1DB954; }
   border-left: 3px solid #1ed760;
 }
 
-.playlist {
-  margin-top: 120px; /* adjust to match height of your top bar */
-  margin-bottom: 100px; /* adjust to match height of bottom controls */
-  overflow-y: auto;
+.top-fixed, .bottom-fixed {
+  background: #121212;
+  padding: 8px 12px;
 }
 
 /* Mobile tweaks */
